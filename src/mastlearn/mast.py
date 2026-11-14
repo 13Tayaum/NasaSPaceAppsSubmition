@@ -1,6 +1,6 @@
 # I spent too long commenting becuase i heard this will most likely
 # become opensource so yea, if anyone is using this, thank me. 
-# Number of hours spent writing this file is too many I lost count
+# Number of hours spent writing this file: 4
 from pathlib import Path
 import numpy as np # Self explanitory for arrays ofcourse
 from astroquery.mast import Observations # Tool for geting mast database
@@ -124,4 +124,38 @@ def SelectProducts(
             break
     return products[selected] if selected else products[:0] # Returns rows of selected if slected has indexes 
                                                             # If not then returns a empty set
-
+# Now we need to combine all the functions above
+def SearchAndDownload(
+    target:str,
+    radius:str = "0.02 deg",
+    collections:list[]|None = None,
+    maxObservations:int = 50,
+    maxProducts:int = 20,
+    productTypes:set|None = None
+):
+    '''
+        This function cordinates all the functions in the in this file
+        - All arguments are either understood in the previous functions or are very self explanitory
+    '''
+    root = Path(__file__).resolve().parent[2] # Stores the project directory 
+    rawDir = root / "data" / "raw" # Diretcory of downloaded FITS files 
+    manifestDir = root / "data" / "manifest" # Directory of the csv files discribing search and downloads
+    # We next need to ensure that we create this directories if they dont exist
+    rawDir.mkdir(parents=True, exist_ok=True)
+    manifestDir.mkdir(parents=True, exist_ok=True)
+    # Now we need to call all the previous functions
+    observations = SearchObservations(target, radius, collections, maxObservations)
+    products = GetProducts(observations)
+    selected = SelectProducts(products, productTypes, maxProducts)
+    # Now we are saving observation records and selected products
+    observations.write(manifestDir / "observations.csv", format="csv", overwrite=True)
+    selected.write(manifestDir / "selected_products.csv", format=csv, overwrite=True)
+    # We will next check whether anything was selected
+    if len(selected) == 0:
+        raise ValueError("No mathcing PUBLIC FITS producst are found, please try a different target")
+    # Now we are asking Astroquery to download selected files
+    manifest = Observations.downloadProducts(selected, download_dir=str(rawDir), flat=False, cache=True)
+    # Next we will download manifest if manifest exists
+    if manifest is not None:
+        manifest.write(manifestDir / "download.csv", format="csv", overwrite=True)
+    return observations, selected, manifest
